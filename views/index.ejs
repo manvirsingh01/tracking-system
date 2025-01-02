@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Document Table</title>
+    <link rel="stylesheet" href="/css/index.css">
+</head>
+<body>
+
+<h2>Document Table</h2>
+
+<table border="1">
+    <thead>
+        <tr>
+            <th>Document ID</th>
+            <th>Document Name</th>
+            <th>Recent Date</th>
+            <th>Recent Time</th>
+            <th>Recent Place</th>
+            <th>Previous Date</th>
+            <th>Previous Time</th>
+            <th>Previous Place</th>
+        </tr>
+    </thead>
+    <tbody>
+        <% data.forEach((row) => { %>
+        <tr>
+            <td><a href="/view-qr/<%= row.id %>"><%= row.id %></a></td>
+            <td><%= row.name %></td>
+            <td><%= row.recentDate %></td>
+            <td><%= row.recentTime %></td>
+            <td><%= row.recentPlace %></td>
+            <td><%= row.previousDate %></td>
+            <td><%= row.previousTime %></td>
+            <td><%= row.previousPlace %></td>
+        </tr>
+        <% }) %>
+    </tbody>
+</table>
+
+<button class="button" onclick="window.location.href='NewDocument.html'">Add New Document</button>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Details and QR Code</title>
+</head>
+<body>
+    <h1>QR Code and Details for Document: <%= documentDetails.id %></h1>
+
+    <h2>Document Details</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Field</th>
+                <th>Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% for (const [key, value] of Object.entries(documentDetails)) { %>
+                <tr>
+                    <td><%= key %></td>
+                    <td><%= value %></td>
+                </tr>
+            <% } %>
+        </tbody>
+    </table>
+
+    <h2>QR Code</h2>
+    <img src="/<%= qrCodePath %>" alt="QR Code" style="width: 200px; height: 200px;" />
+    <br><br>
+    <a href="/">Back to Documents</a>
+</body>
+</html>

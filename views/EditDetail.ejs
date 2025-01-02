@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Document Details</title>
+</head>
+<body>
+    <h1>Edit Details for Document: <%= documentDetails.id %></h1>
+
+    <h2>Current Details</h2>
+    <table>
+        <tr>
+            <th>ID</th>
+            <td><%= documentDetails.id %></td>
+        </tr>
+        <tr>
+            <th>Name</th>
+            <td><%= documentDetails.name %></td>
+        </tr>
+        <tr>
+            <th>Recent Place</th>
+            <td><%= documentDetails.recentPlace %></td>
+        </tr>
+        <tr>
+            <th>Recent Time</th>
+            <td><%= documentDetails.recentTime %></td>
+        </tr>
+        <tr>
+            <th>Recent Date</th>
+            <td><%= documentDetails.recentDate %></td>
+        </tr>
+    </table>
+
+    <h2>Update Details</h2>
+    <form action="/EditDetail/<%= documentDetails.id %>" method="POST">
+        <label for="newPlace">New Place:</label>
+        <input type="text" id="newPlace" name="newPlace" placeholder="Enter new place"><br>
+        <label for="prevTime">Previous Time:</label>
+        <input type="time" id="prevTime" name="previousTime" required><br>
+        <label for="newDate">New Date:</label>
+        <input type="date" id="newDate" name="newDate"><br>
+        <button type="submit">Update</button>
+    </form>
+
+    <br>
+    <a href="/">Back to Documents</a>
+</body>
+</html>
