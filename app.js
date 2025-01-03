@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const xlsx = require('xlsx');
 const bcrypt = require('bcrypt');
 const fs = require('fs');
+const ExcelJS = require('exceljs');
 const QRCode = require('qrcode'); // Import the QR code library
 const app = express();
 const port = 3000;
@@ -15,17 +16,6 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Serve static files like QR codes
 app.use(express.static('public'));
-
-const mongoose = require('mongoose');
-
-const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  department: { type: String, required: true },
-});
-
-module.exports = mongoose.model('User', userSchema);
 
 app.get('/', (req, res) => {
     if (!fs.existsSync('output.xlsx')) {
@@ -51,30 +41,81 @@ app.get('/signup', (req, res) => {
     res.render('NewUser');
 });
 
+// Path to the Excel file
+const EXCEL_FILE = './users.xlsx';
+
+// Signup route
 app.post('/signup', async (req, res) => {
     const { name, email, password, department } = req.body;
   
-    if (!['admin', 'forensic', 'account', 'academics'].includes(department)) {
-      return res.status(400).send('Invalid department selected');
+    if (!name || !email || !password || !department) {
+      return res.status(400).send('All fields are required.');
+    }
+  
+    const validDepartments = ['admin', 'forensic', 'account', 'academics'];
+    if (!validDepartments.includes(department)) {
+      return res.status(400).send('Invalid department selected.');
     }
   
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
   
-      const newUser = new User({
+      let workbook = new ExcelJS.Workbook();
+      const worksheetColumns = [
+        { header: 'Name', key: 'name', width: 20 },
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'Password', key: 'password', width: 40 },
+        { header: 'Department', key: 'department', width: 20 },
+      ];
+  
+      try {
+        if (fs.existsSync(EXCEL_FILE)) {
+          await workbook.xlsx.readFile(EXCEL_FILE);
+        } else {
+          const worksheet = workbook.addWorksheet('Users');
+          worksheet.columns = worksheetColumns;
+          await workbook.xlsx.writeFile(EXCEL_FILE);
+        }
+      } catch (error) {
+        console.error('Error reading Excel file. Creating a new one.', error);
+        workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Users');
+        worksheet.columns = worksheetColumns;
+        await workbook.xlsx.writeFile(EXCEL_FILE);
+      }
+  
+      const worksheet = workbook.getWorksheet('Users');
+  
+      // Check if email already exists
+      let emailExists = false;
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1 && row.getCell(2).value === email) {
+          emailExists = true;
+        }
+      });
+  
+      if (emailExists) {
+        return res.status(400).send('Email already exists.');
+      }
+  
+      // Add the new user data
+      worksheet.addRow({
         name,
         email,
         password: hashedPassword,
         department,
       });
   
-      await newUser.save();
+      await workbook.xlsx.writeFile(EXCEL_FILE);
+  
       res.status(201).send('User registered successfully');
     } catch (error) {
-      console.error(error);
+      console.error('Error registering user:', error);
       res.status(500).send('Error registering user');
     }
+    res.redirect('/');
   });
+  
   
 
 app.post('/submit', async (req, res) => {
@@ -196,19 +237,73 @@ app.get('/login', (req, res) => {
     res.render('login');
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const { email, password, department } = req.body;
-
-    // Here, you can add authentication logic
-    // Example: Check if the user exists in your database
-    if (email && password && department) {
-        // Redirect to the selected department's page
-        return res.redirect(`/departments/${department}`);
+  
+    // Validate input
+    if (!email || !password || !department) {
+      return res.status(400).send('All fields are required.');
     }
-
-    // If login fails
-    res.status(400).send("Invalid login credentials or department selection");
-});
+  
+    // Departments allowed
+    const validDepartments = ['admin', 'forensic', 'account', 'academics'];
+    if (!validDepartments.includes(department)) {
+      return res.status(400).send('Invalid department selected.');
+    }
+  
+    try {
+      const workbook = new ExcelJS.Workbook();
+  
+      if (!fs.existsSync(EXCEL_FILE)) {
+        return res.status(404).send('No users found. Please sign up first.');
+      }
+  
+      await workbook.xlsx.readFile(EXCEL_FILE);
+      const worksheet = workbook.getWorksheet('Users');
+  
+      // Search for the user in the Excel file
+      let userFound = null;
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1) {
+          const rowEmail = row.getCell(2).value;
+          const rowPassword = row.getCell(3).value;
+          const rowDepartment = row.getCell(4).value;
+  
+          if (rowEmail === email && rowDepartment === department) {
+            userFound = { email: rowEmail, password: rowPassword, department: rowDepartment };
+          }
+        }
+      });
+  
+      if (!userFound) {
+        return res.status(401).send('Invalid email or department.');
+      }
+  
+      // Compare the hashed password
+      const isPasswordValid = await bcrypt.compare(password, userFound.password);
+      if (!isPasswordValid) {
+        return res.status(401).send('Invalid password.');
+      }
+  
+      // Redirect to the department page
+      switch (department) {
+        case 'admin':
+          return res.status(200).send('Redirecting to Admin Page');
+        case 'forensic':
+          return res.status(200).send('Redirecting to Forensic Page');
+        case 'account':
+          return res.status(200).send('Redirecting to Account Page');
+        case 'academics':
+          return res.status(200).send('Redirecting to Academics Page');
+        default:
+          return res.status(400).send('Invalid department.');
+      }
+    } catch (error) {
+      console.error('Error logging in:', error);
+      res.status(500).send('Error logging in.');
+    }
+  });
+  
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
