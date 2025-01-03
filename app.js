@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const xlsx = require('xlsx');
+const bcrypt = require('bcrypt');
 const fs = require('fs');
 const QRCode = require('qrcode'); // Import the QR code library
 const app = express();
@@ -10,8 +11,21 @@ app.set('view engine', 'ejs');
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+
+
 // Serve static files like QR codes
 app.use(express.static('public'));
+
+const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  department: { type: String, required: true },
+});
+
+module.exports = mongoose.model('User', userSchema);
 
 app.get('/', (req, res) => {
     if (!fs.existsSync('output.xlsx')) {
@@ -32,6 +46,36 @@ app.get('/', (req, res) => {
 app.get('/NewDocument.html', (req, res) => {
     res.render('NewDocument');
 });
+
+app.get('/signup', (req, res) => {
+    res.render('NewUser');
+});
+
+app.post('/signup', async (req, res) => {
+    const { name, email, password, department } = req.body;
+  
+    if (!['admin', 'forensic', 'account', 'academics'].includes(department)) {
+      return res.status(400).send('Invalid department selected');
+    }
+  
+    try {
+      const hashedPassword = await bcrypt.hash(password, 10);
+  
+      const newUser = new User({
+        name,
+        email,
+        password: hashedPassword,
+        department,
+      });
+  
+      await newUser.save();
+      res.status(201).send('User registered successfully');
+    } catch (error) {
+      console.error(error);
+      res.status(500).send('Error registering user');
+    }
+  });
+  
 
 app.post('/submit', async (req, res) => {
     const formData = req.body;
@@ -148,7 +192,23 @@ app.post('/EditDetail/:id', (req, res) => {
         res.status(404).send('Document not found');
     }
 });
+app.get('/login', (req, res) => {
+    res.render('login');
+});
 
+app.post('/login', (req, res) => {
+    const { email, password, department } = req.body;
+
+    // Here, you can add authentication logic
+    // Example: Check if the user exists in your database
+    if (email && password && department) {
+        // Redirect to the selected department's page
+        return res.redirect(`/departments/${department}`);
+    }
+
+    // If login fails
+    res.status(400).send("Invalid login credentials or department selection");
+});
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
