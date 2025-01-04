@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <h1><%= title %></h1>
+  </header>
+
+  <main>
+    <p><%= description %></p>
+
+    <section>
+      <% if (department === 'admin') { %>
+        <h2>Admin Tools</h2>
+        <ul>
+          <li><a href="/manage-users">Manage Users</a></li>
+          <li><a href="/settings">Settings</a></li>
+        </ul>
+      <% } else if (department === 'forensic') { %>
+        <h2>Forensic Resources</h2>
+        <ul>
+          <li><a href="/case-files">Case Files</a></li>
+          <li><a href="/labs">Labs</a></li>
+        </ul>
+      <% } else if (department === 'account') { %>
+        <h2>Accounting Section</h2>
+        <ul>
+          <li><a href="/financial-reports">Financial Reports</a></li>
+          <li><a href="/budgets">Budgets</a></li>
+        </ul>
+      <% } else if (department === 'academics') { %>
+        <h2>Academic Resources</h2>
+        <ul>
+          <li><a href="/courses">Courses</a></li>
+          <li><a href="/exams">Exams</a></li>
+        </ul>
+      <% } %>
+    </section>
+    <section>
+        <h2>Document Tracking Table</h2>
+        <table border="1" cellpadding="10" cellspacing="0">
+          <thead>
+            <tr>
+              <th>Document ID</th>
+              <th>Document Name</th>
+              <th>Recent Date</th>
+              <th>Recent Time</th>
+              <th>Recent Place</th>
+              <th>Previous Date</th>
+              <th>Previous Time</th>
+              <th>Previous Place</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (data.length > 0) { %>
+              <% data.forEach((row) => { %>
+              <tr>
+                <td><a href="/view-qr/<%= row.id %>"><%= row.id %></a></td>
+                <td><%= row.name %></td>
+                <td><%= row.recentDate %></td>
+                <td><%= row.recentTime %></td>
+                <td><%= row.recentPlace %></td>
+                <td><%= row.previousDate %></td>
+                <td><%= row.previousTime %></td>
+                <td><%= row.previousPlace %></td>
+              </tr>
+              <% }) %>
+            <% } else { %>
+              <tr>
+                <td colspan="8" style="text-align: center;">No records available</td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </section>
+      
+  </main>
+
+  <footer>
+    <p>&copy; 2025 Department Management System</p>
+  </footer>
+</body>
+</html>

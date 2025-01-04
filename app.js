@@ -4,307 +4,243 @@ const xlsx = require('xlsx');
 const bcrypt = require('bcrypt');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
-const QRCode = require('qrcode'); // Import the QR code library
+const QRCode = require('qrcode');
+const path = require('path');
+
 const app = express();
 const port = 3000;
 
+// Constants
+const EXCEL_FILE = './users.xlsx';
+const OUTPUT_FILE = './output.xlsx';
+const LOGS_DIR = path.join(__dirname, 'logs');
+const QR_CODES_DIR = path.join(__dirname, 'public/qrcodes');
+const VALID_DEPARTMENTS = ['admin', 'forensic', 'account', 'academics'];
+
+// Middleware
 app.set('view engine', 'ejs');
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-
-
-
-// Serve static files like QR codes
 app.use(express.static('public'));
 
-app.get('/', (req, res) => {
-    if (!fs.existsSync('output.xlsx')) {
-        const wb = xlsx.utils.book_new();
-        const ws = xlsx.utils.json_to_sheet([]);
-        xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
-        xlsx.writeFile(wb, 'output.xlsx');
-    }
+// Utility Functions
+const ensureFileExists = (filePath, worksheetColumns = null) => {
+  if (!fs.existsSync(filePath)) {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Sheet1');
+    if (worksheetColumns) worksheet.columns = worksheetColumns;
+    workbook.xlsx.writeFile(filePath);
+  }
+};
 
-    const workbook = xlsx.readFile('output.xlsx');
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const data = xlsx.utils.sheet_to_json(worksheet);
+const readExcelData = async (filePath, sheetName = 'Sheet1') => {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filePath);
+  const worksheet = workbook.getWorksheet(sheetName);
+  const rows = worksheet.getSheetValues().slice(2);
+  const headers = worksheet.getRow(1).values.slice(1);
 
-    res.render('index', { data: data });
-});
-
-app.get('/NewDocument.html', (req, res) => {
-    res.render('NewDocument');
-});
-
-app.get('/signup', (req, res) => {
-    res.render('NewUser');
-});
-
-// Path to the Excel file
-const EXCEL_FILE = './users.xlsx';
-
-// Signup route
-app.post('/signup', async (req, res) => {
-    const { name, email, password, department } = req.body;
-  
-    if (!name || !email || !password || !department) {
-      return res.status(400).send('All fields are required.');
-    }
-  
-    const validDepartments = ['admin', 'forensic', 'account', 'academics'];
-    if (!validDepartments.includes(department)) {
-      return res.status(400).send('Invalid department selected.');
-    }
-  
-    try {
-      const hashedPassword = await bcrypt.hash(password, 10);
-  
-      let workbook = new ExcelJS.Workbook();
-      const worksheetColumns = [
-        { header: 'Name', key: 'name', width: 20 },
-        { header: 'Email', key: 'email', width: 30 },
-        { header: 'Password', key: 'password', width: 40 },
-        { header: 'Department', key: 'department', width: 20 },
-      ];
-  
-      try {
-        if (fs.existsSync(EXCEL_FILE)) {
-          await workbook.xlsx.readFile(EXCEL_FILE);
-        } else {
-          const worksheet = workbook.addWorksheet('Users');
-          worksheet.columns = worksheetColumns;
-          await workbook.xlsx.writeFile(EXCEL_FILE);
-        }
-      } catch (error) {
-        console.error('Error reading Excel file. Creating a new one.', error);
-        workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Users');
-        worksheet.columns = worksheetColumns;
-        await workbook.xlsx.writeFile(EXCEL_FILE);
-      }
-  
-      const worksheet = workbook.getWorksheet('Users');
-  
-      // Check if email already exists
-      let emailExists = false;
-      worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber > 1 && row.getCell(2).value === email) {
-          emailExists = true;
-        }
-      });
-  
-      if (emailExists) {
-        return res.status(400).send('Email already exists.');
-      }
-  
-      // Add the new user data
-      worksheet.addRow({
-        name,
-        email,
-        password: hashedPassword,
-        department,
-      });
-  
-      await workbook.xlsx.writeFile(EXCEL_FILE);
-  
-      res.status(201).send('User registered successfully');
-    } catch (error) {
-      console.error('Error registering user:', error);
-      res.status(500).send('Error registering user');
-    }
-    res.redirect('/');
+  return rows.map(row => {
+    const rowData = {};
+    headers.forEach((header, index) => {
+      rowData[header] = row[index + 1] || '';
+    });
+    return rowData;
   });
-  
-  
+};
+
+const writeExcelData = async (filePath, data, sheetName = 'Sheet1') => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName);
+  if (data.length > 0) worksheet.columns = Object.keys(data[0]).map(key => ({ header: key, key }));
+  worksheet.addRows(data);
+  await workbook.xlsx.writeFile(filePath);
+};
+
+const generateQRCode = async (data, filePath) => {
+  await QRCode.toFile(filePath, data, {
+    color: { dark: '#000000', light: '#ffffff' },
+  });
+};
+
+const updateLogFile = async (logFilePath, logEntry) => {
+  const workbook = fs.existsSync(logFilePath) ? xlsx.readFile(logFilePath) : new ExcelJS.Workbook();
+  const sheetName = workbook.SheetNames ? workbook.SheetNames[0] : 'Sheet1';
+  const worksheet = workbook.Sheets[sheetName] || workbook.addWorksheet(sheetName);
+  const existingData = xlsx.utils.sheet_to_json(worksheet);
+
+  existingData.push(logEntry);
+  const updatedSheet = xlsx.utils.json_to_sheet(existingData);
+  workbook.Sheets[sheetName] = updatedSheet;
+  xlsx.writeFile(workbook, logFilePath);
+};
+
+// Routes
+app.get('/', async (req, res) => {
+  ensureFileExists(OUTPUT_FILE);
+  const data = await readExcelData(OUTPUT_FILE);
+  res.render('index', { data });
+});
+
+app.get('/signup', (req, res) => res.render('NewUser'));
+
+app.post('/signup', async (req, res) => {
+  const { name, email, password, department } = req.body;
+
+  if (!name || !email || !password || !VALID_DEPARTMENTS.includes(department)) {
+    return res.status(400).send('Invalid input or department.');
+  }
+
+  ensureFileExists(EXCEL_FILE, [
+    { header: 'Name', key: 'name', width: 20 },
+    { header: 'Email', key: 'email', width: 30 },
+    { header: 'Password', key: 'password', width: 40 },
+    { header: 'Department', key: 'department', width: 20 },
+  ]);
+
+  const users = await readExcelData(EXCEL_FILE);
+  if (users.find(user => user.Email === email)) {
+    return res.status(400).send('Email already exists.');
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  users.push({ Name: name, Email: email, Password: hashedPassword, Department: department });
+  await writeExcelData(EXCEL_FILE, users);
+
+  res.redirect('/');
+});
+
+app.get('/department/:department', async (req, res) => {
+  const { department } = req.params;
+
+  if (!VALID_DEPARTMENTS.includes(department)) {
+    return res.status(404).send('Department not found.');
+  }
+
+  ensureFileExists(OUTPUT_FILE);
+  const data = await readExcelData(OUTPUT_FILE);
+  res.render('Department', {
+    department,
+    title: `Welcome to the ${department.charAt(0).toUpperCase() + department.slice(1)} Department`,
+    description: `This is the page for the ${department.charAt(0).toUpperCase() + department.slice(1)} department.`,
+    data,
+  });
+});
 
 app.post('/submit', async (req, res) => {
-    const formData = req.body;
+  const formData = req.body;
+  formData.id = `DOC-${Date.now()}`;
 
-    // Generate a unique document ID
-    const documentId = `DOC-${Date.now()}`;
-    formData.id = documentId;
+  ensureFileExists(OUTPUT_FILE);
+  const data = await readExcelData(OUTPUT_FILE);
+  data.push(formData);
+  await writeExcelData(OUTPUT_FILE, data);
 
-    if (fs.existsSync('output.xlsx')) {
-        const workbook = xlsx.readFile('output.xlsx');
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
+  const qrCodePath = path.join(QR_CODES_DIR, `${formData.id}.png`);
+  await generateQRCode(`http://localhost:3000/EditDetail/${formData.id}`, qrCodePath);
 
-        const existingData = xlsx.utils.sheet_to_json(worksheet);
-        existingData.push(formData);
+  const logFilePath = path.join(LOGS_DIR, `${formData.id}.xlsx`);
+  await updateLogFile(logFilePath, {
+    Date: new Date().toLocaleDateString(),
+    InTime: new Date().toLocaleTimeString(),
+    Place: formData.place || 'Unknown',
+    OutTime: '',
+  });
 
-        const updatedWorksheet = xlsx.utils.json_to_sheet(existingData);
-        workbook.Sheets[sheetName] = updatedWorksheet;
-
-        xlsx.writeFile(workbook, 'output.xlsx');
-    } else {
-        const workbook = xlsx.utils.book_new();
-        const worksheet = xlsx.utils.json_to_sheet([formData]);
-        xlsx.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
-        xlsx.writeFile(workbook, 'output.xlsx');
-    }
-
-    // Generate QR Code
-    const qrCodeData = `http://localhost:3000/EditDetail/${documentId}`;
-    const qrCodePath = `public/qrcodes/${documentId}.png`;
-    try {
-        await QRCode.toFile(qrCodePath, documentId, {
-            color: {
-                dark: '#000000', // Black dots
-                light: '#ffffff', // White background
-            },
-        });
-
-        console.log(`QR Code generated: ${qrCodePath}`);
-    } catch (err) {
-        console.error('Error generating QR Code:', err);
-    }
-
-    // Redirect to the homepage
-    res.redirect('/');
+  res.redirect('/');
 });
 
-// Route to view the QR code for a specific document
-app.get('/view-qr/:id', (req, res) => {
-    const documentId = req.params.id;
-    const workbook = xlsx.readFile('output.xlsx');
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const data = xlsx.utils.sheet_to_json(worksheet);
+app.get('/EditDetail/:id', async (req, res) => {
+  const { id } = req.params;
 
-    // Find the document data by ID
-    const documentDetails = data.find(doc => doc.id === documentId);
+  ensureFileExists(OUTPUT_FILE);
+  const data = await readExcelData(OUTPUT_FILE);
+  const documentDetails = data.find(doc => doc.id === id);
 
-    if (documentDetails) {
-        const qrCodePath = `qrcodes/${documentId}.png`;
-        res.render('viewQr', { documentDetails, qrCodePath });
-    } else {
-        res.status(404).send('Document not found');
-    }
+  if (!documentDetails) {
+    return res.status(404).send('Document not found.');
+  }
+
+  res.render('EditDetail', { documentDetails });
 });
 
-app.get('/EditDetail/:id', (req, res) => {
-    const documentId = req.params.id;
+app.post('/EditDetail/:id', async (req, res) => {
+  const { id } = req.params;
+  const { action, newPlace, newDate, newTime, recentPlace, recentTime, recentDate } = req.body;
 
-    // Read the Excel file
-    const workbook = xlsx.readFile('output.xlsx');
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const data = xlsx.utils.sheet_to_json(worksheet);
+  ensureFileExists(OUTPUT_FILE);
+  const data = await readExcelData(OUTPUT_FILE);
+  const documentIndex = data.findIndex(doc => doc.id === id);
 
-    // Find the document by ID
-    const documentDetails = data.find(doc => doc.id === documentId);
+  if (documentIndex === -1) {
+    return res.status(404).send('Document not found.');
+  }
 
-    if (documentDetails) {
-        res.render('EditDetail', { documentDetails });
-    } else {
-        res.status(404).send('Document not found');
-    }
+  const logFilePath = path.join(LOGS_DIR, `${id}.xlsx`);
+
+  if (action === 'receive') {
+    data[documentIndex] = { ...data[documentIndex], recentPlace, recentTime, recentDate };
+    await updateLogFile(logFilePath, {
+      Action: 'Receive',
+      Date: recentDate || new Date().toLocaleDateString(),
+      InTime: recentTime || new Date().toLocaleTimeString(),
+      Place: recentPlace || 'Unknown',
+      OutTime: '',
+    });
+  } else if (action === 'forward') {
+    data[documentIndex] = { ...data[documentIndex], newPlace, newTime, newDate };
+    await updateLogFile(logFilePath, {
+      Action: 'Forward',
+      Date: newDate || new Date().toLocaleDateString(),
+      InTime: '',
+      Place: newPlace || 'Unknown',
+      OutTime: newTime || new Date().toLocaleTimeString(),
+    });
+  }
+
+  await writeExcelData(OUTPUT_FILE, data);
+  res.redirect(`/EditDetail/${id}`);
 });
 
-app.post('/EditDetail/:id', (req, res) => {
-    const documentId = req.params.id;
-    const { newPlace, newTime, newDate } = req.body;
+app.get('/view-qr/:id', async (req, res) => {
+  const { id } = req.params;
 
-    // Read the Excel file
-    const workbook = xlsx.readFile('output.xlsx');
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const data = xlsx.utils.sheet_to_json(worksheet);
+  ensureFileExists(OUTPUT_FILE);
+  const data = await readExcelData(OUTPUT_FILE);
+  const documentDetails = data.find(doc => doc.id === id);
 
-    // Find and update the document
-    const documentIndex = data.findIndex(doc => doc.id === documentId);
+  if (!documentDetails) {
+    return res.status(404).send('Document not found.');
+  }
 
-    if (documentIndex !== -1) {
-        // Update the recent details with the new details
-        data[documentIndex].recentPlace = newPlace || data[documentIndex].recentPlace;
-        data[documentIndex].recentTime = newTime || data[documentIndex].recentTime;
-        data[documentIndex].recentDate = newDate || data[documentIndex].recentDate;
+  const qrCodePath = path.join(QR_CODES_DIR, `${id}.png`);
+  const logFilePath = path.join(LOGS_DIR, `${id}.xlsx`);
+  const logData = fs.existsSync(logFilePath) ? await readExcelData(logFilePath) : [];
 
-        // Replace the old worksheet with the updated data
-        const updatedWorksheet = xlsx.utils.json_to_sheet(data);
-        workbook.Sheets[sheetName] = updatedWorksheet;
-
-        // Write the updated workbook back to the file
-        xlsx.writeFile(workbook, 'output.xlsx');
-
-        res.end('all data is updated\n');
-    } else {
-        res.status(404).send('Document not found');
-    }
+  res.render('viewQr', { documentDetails, qrCodePath, logData });
 });
-app.get('/login', (req, res) => {
-    res.render('login');
-});
+
+app.get('/login', (req, res) => res.render('login'));
 
 app.post('/login', async (req, res) => {
-    const { email, password, department } = req.body;
-  
-    // Validate input
-    if (!email || !password || !department) {
-      return res.status(400).send('All fields are required.');
-    }
-  
-    // Departments allowed
-    const validDepartments = ['admin', 'forensic', 'account', 'academics'];
-    if (!validDepartments.includes(department)) {
-      return res.status(400).send('Invalid department selected.');
-    }
-  
-    try {
-      const workbook = new ExcelJS.Workbook();
-  
-      if (!fs.existsSync(EXCEL_FILE)) {
-        return res.status(404).send('No users found. Please sign up first.');
-      }
-  
-      await workbook.xlsx.readFile(EXCEL_FILE);
-      const worksheet = workbook.getWorksheet('Users');
-  
-      // Search for the user in the Excel file
-      let userFound = null;
-      worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber > 1) {
-          const rowEmail = row.getCell(2).value;
-          const rowPassword = row.getCell(3).value;
-          const rowDepartment = row.getCell(4).value;
-  
-          if (rowEmail === email && rowDepartment === department) {
-            userFound = { email: rowEmail, password: rowPassword, department: rowDepartment };
-          }
-        }
-      });
-  
-      if (!userFound) {
-        return res.status(401).send('Invalid email or department.');
-      }
-  
-      // Compare the hashed password
-      const isPasswordValid = await bcrypt.compare(password, userFound.password);
-      if (!isPasswordValid) {
-        return res.status(401).send('Invalid password.');
-      }
-  
-      // Redirect to the department page
-      switch (department) {
-        case 'admin':
-          return res.status(200).send('Redirecting to Admin Page');
-        case 'forensic':
-          return res.status(200).send('Redirecting to Forensic Page');
-        case 'account':
-          return res.status(200).send('Redirecting to Account Page');
-        case 'academics':
-          return res.status(200).send('Redirecting to Academics Page');
-        default:
-          return res.status(400).send('Invalid department.');
-      }
-    } catch (error) {
-      console.error('Error logging in:', error);
-      res.status(500).send('Error logging in.');
-    }
-  });
-  
+  const { email, password, department } = req.body;
 
+  if (!email || !password || !VALID_DEPARTMENTS.includes(department)) {
+    return res.status(400).send('Invalid login credentials.');
+  }
+
+  ensureFileExists(EXCEL_FILE);
+  const users = await readExcelData(EXCEL_FILE);
+  const user = users.find(user => user.Email === email && user.Department === department);
+
+  if (!user || !(await bcrypt.compare(password, user.Password))) {
+    return res.status(401).send('Invalid email, department, or password.');
+  }
+
+  res.redirect(`/department/${department}`);
+});
+
+// Start Server
 app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
+  console.log(`Server is running on http://localhost:${port}`);
 });

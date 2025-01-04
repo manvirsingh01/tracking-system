@@ -30,9 +30,36 @@
     <h2>QR Code</h2>
     <img src="/<%= qrCodePath %>" alt="QR Code" style="width: 200px; height: 200px;" />
     <br><br>
-    <div>
-        <!-- catbot -->
-    </div>
+
+    <h2>Log Data</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>InTime</th>
+                <th>Place</th>
+                <th>OutTime</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% if (logData && logData.length > 0) { %>
+                <% logData.forEach(log => { %>
+                    <tr>
+                        <td><%= log.Date %></td>
+                        <td><%= log.InTime %></td>
+                        <td><%= log.Place %></td>
+                        <td><%= log.OutTime %></td>
+                        <td><%= log.Action %></td>
+                    </tr>
+                <% }); %>
+            <% } else { %>
+                <tr>
+                    <td colspan="4">No log data available</td>
+                </tr>
+            <% } %>
+        </tbody>
+    </table>
+
     <a href="/">Back to Documents</a>
 </body>
 </html>

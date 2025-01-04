@@ -33,15 +33,38 @@
         </tr>
     </table>
 
-    <h2>Update Details</h2>
+    <h2>Actions</h2>
+
+    <!-- Receive Action -->
+    <h3>Receive Document</h3>
     <form action="/EditDetail/<%= documentDetails.id %>" method="POST">
+        <input type="hidden" name="action" value="receive">
+        <label for="recentPlace">Recent Place:</label>
+        <input type="text" id="recentPlace" name="recentPlace" placeholder="Enter recent place" required><br>
+
+        <label for="recentTime">Recent Time:</label>
+        <input type="time" id="recentTime" name="recentTime" required><br>
+
+        <label for="recentDate">Recent Date:</label>
+        <input type="date" id="recentDate" name="recentDate" required><br>
+
+        <button type="submit">Receive</button>
+    </form>
+
+    <!-- Forward Action -->
+    <h3>Forward Document</h3>
+    <form action="/EditDetail/<%= documentDetails.id %>" method="POST">
+        <input type="hidden" name="action" value="forward">
         <label for="newPlace">New Place:</label>
-        <input type="text" id="newPlace" name="newPlace" placeholder="Enter new place"><br>
-        <label for="prevTime">Previous Time:</label>
-        <input type="time" id="prevTime" name="previousTime" required><br>
+        <input type="text" id="newPlace" name="newPlace" placeholder="Enter new place" required><br>
+
+        <label for="newTime">New Time:</label>
+        <input type="time" id="newTime" name="newTime" required><br>
+
         <label for="newDate">New Date:</label>
-        <input type="date" id="newDate" name="newDate"><br>
-        <button type="submit">Update</button>
+        <input type="date" id="newDate" name="newDate" required><br>
+
+        <button type="submit">Forward</button>
     </form>
 
     <br>
