@@ -195,13 +195,17 @@ app.get('/NewDocument.html', (req, res) => res.render('NewDocument'));
 app.post('/signup', async (req, res) => {
   try {
     const { name, email, password, department } = req.body;
-    console.log('Received data:', req.body);
 
+    // Log received data for debugging
+    console.log('Received signup data:', req.body);
+
+    // Validate the input fields
     if (!name || !email || !password || !VALID_DEPARTMENTS.includes(department)) {
-      console.log('Validation failed');
+      console.log('Validation failed: Missing or invalid data.');
       return res.status(400).send('Invalid input or department.');
     }
 
+    // Ensure the Excel file exists with the required headers
     ensureFileExists(EXCEL_FILE, [
       { header: 'Name', key: 'name', width: 20 },
       { header: 'Email', key: 'email', width: 30 },
@@ -209,29 +213,32 @@ app.post('/signup', async (req, res) => {
       { header: 'Department', key: 'department', width: 20 },
     ]);
 
-    // Log the EXCEL_FILE path
-    console.log('EXCEL_FILE path:', EXCEL_FILE);
-
+    // Read existing data from the Excel file
     const users = await readExcelData(EXCEL_FILE);
-    console.log('Current users:', users);
+    console.log('Current users in file:', users);
 
-    if (users.find(user => user.email === email)) {
-      console.log('Email already exists:', email);
+    // Check for existing email
+    if (users.some(user => user.email === email)) {
+      console.log('Duplicate email detected:', email);
       return res.status(400).send('Email already exists.');
     }
 
+    // Hash the password for secure storage
     const hashedPassword = await bcrypt.hash(password, 10);
-    console.log('Hashed password:', hashedPassword);
+    console.log('Hashed password generated.');
 
-    users.push({ name, email, password: hashedPassword, department });
-    console.log('Users before write:', users);
+    // Append new user data to the list
+    const newUser = { name, email, password: hashedPassword, department };
+    users.push(newUser);
 
+    // Write updated data back to the Excel file
     await writeExcelData(EXCEL_FILE, users);
-    console.log('Updated users:', users);
+    console.log('User added successfully:', newUser);
 
+    // Redirect to home page
     res.redirect('/');
   } catch (err) {
-    console.error('Error during signup:', err);
+    console.error('Error during signup process:', err);
     res.status(500).send('An error occurred during signup.');
   }
 });
@@ -302,74 +309,66 @@ app.get('/EditDetail/:id', async (req, res) => {
 
   res.render('EditDetail', { documentDetails });
 });
-
 app.post('/EditDetail/:id', async (req, res) => {
-  const { id } = req.params;
-  const { action, newPlace, newDate, newTime, recentPlace, recentTime, recentDate } = req.body;
+  try {
+    const { id } = req.params;
+    const { action, place, date, time } = req.body;
 
-  ensureFileExists(OUTPUT_FILE);
-  const data = await readExcelData(OUTPUT_FILE);
-  const documentIndex = data.findIndex(doc => doc.id === id);
+    // Ensure the main data file exists
+    ensureFileExists(OUTPUT_FILE);
+    const data = await readExcelData(OUTPUT_FILE);
+    const documentIndex = data.findIndex(doc => doc.id === id);
 
-  if (documentIndex === -1) {
-    return res.status(404).send('Document not found.');
-  }
+    if (documentIndex === -1) {
+      return res.status(404).send('Document not found.');
+    }
 
-  const logFilePath = path.join(LOGS_DIR, `${id}.xlsx`);
-  const document = data[documentIndex];
+    const logFilePath = path.join(LOGS_DIR, `${id}.xlsx`);
+    const document = data[documentIndex];
 
-  if (action === 'receive') {
-    // Preserve the current state before updating
-    const previousPlace = document.recentPlace || 'Unknown';
-    const previousTime = document.recentTime || 'Unknown';
-    const previousDate = document.recentDate || 'Unknown';
+    // Save previous state for logging
+    const previousState = {
+      Place: document.recentPlace || 'Unknown',
+      Time: document.recentTime || 'Unknown',
+      Date: document.recentDate || 'Unknown',
+    };
 
-    // Update the recent place, time, and date
-    document.recentPlace = recentPlace || previousPlace;
-    document.recentTime = recentTime || new Date().toLocaleTimeString();
-    document.recentDate = recentDate || new Date().toLocaleDateString();
+    // Update the document with new values
+    document.recentPlace = place || previousState.Place;
+    document.recentTime = time || new Date().toLocaleTimeString();
+    document.recentDate = date || new Date().toLocaleDateString();
 
-    // Log the action
-    await updateLogFile(logFilePath, {
-      Action: 'Receive',
+    // Define log entry based on action
+    const logEntry = {
+      Action: action || 'Update',
       Date: document.recentDate,
       InTime: document.recentTime,
       Place: document.recentPlace,
       OutTime: '',
-      PreviousPlace: previousPlace, // Add context to logs
-      PreviousTime: previousTime,
-      PreviousDate: previousDate,
-    });
-  } else if (action === 'forward') {
-    // Preserve the current state before forwarding
-    const currentPlace = document.recentPlace || 'Unknown';
+      PreviousPlace: previousState.Place,
+      PreviousTime: previousState.Time,
+      PreviousDate: previousState.Date,
+    };
 
-    // Update the new place, time, and date
-    document.newPlace = newPlace || 'Unknown';
-    document.newTime = newTime || new Date().toLocaleTimeString();
-    document.newDate = newDate || new Date().toLocaleDateString();
+    // Update the log file
+    try {
+      await updateLogFile(logFilePath, logEntry);
+      console.log('Log updated successfully:', logEntry);
+    } catch (err) {
+      console.error('Error updating log file:', err);
+    }
 
-    // Update the recent place as the new forwarding destination
-    document.recentPlace = document.newPlace;
-    document.recentTime = document.newTime;
-    document.recentDate = document.newDate;
+    // Save the updated document back to the main file
+    await writeExcelData(OUTPUT_FILE, data);
+    console.log('Document updated successfully:', document);
 
-    // Log the action
-    await updateLogFile(logFilePath, {
-      Action: 'Forward',
-      Date: document.newDate,
-      InTime: '',
-      Place: document.newPlace,
-      OutTime: document.newTime,
-      PreviousPlace: currentPlace,
-    });
+    res.redirect(`/EditDetail/${id}`);
+  } catch (err) {
+    console.error('Error processing EditDetail route:', err);
+    res.status(500).send('Internal server error.');
   }
-
-  // Save the updated data back to the Excel file
-  await writeExcelData(OUTPUT_FILE, data);
-
-  res.redirect(`/EditDetail/${id}`);
 });
+
 
 
 app.get('/view-qr/:id', async (req, res) => {
