@@ -16,29 +16,15 @@
 
     <section>
       <% if (department === 'admin') { %>
-        <h2>Admin Tools</h2>
-        <ul>
-          <li><a href="/manage-users">Manage Users</a></li>
-          <li><a href="/settings">Settings</a></li>
-        </ul>
+       
       <% } else if (department === 'forensic') { %>
         <h2>Forensic Resources</h2>
-        <ul>
-          <li><a href="/case-files">Case Files</a></li>
-          <li><a href="/labs">Labs</a></li>
-        </ul>
       <% } else if (department === 'account') { %>
         <h2>Accounting Section</h2>
-        <ul>
-          <li><a href="/financial-reports">Financial Reports</a></li>
-          <li><a href="/budgets">Budgets</a></li>
-        </ul>
+        
       <% } else if (department === 'academics') { %>
         <h2>Academic Resources</h2>
-        <ul>
-          <li><a href="/courses">Courses</a></li>
-          <li><a href="/exams">Exams</a></li>
-        </ul>
+        
       <% } %>
     </section>
     <section>

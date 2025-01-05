@@ -22,7 +22,12 @@
         <input type="time" id="recentTime" name="recentTime" required>
 
         <label for="recentPlace">Recent Place:</label>
-        <input type="text" id="recentPlace" name="recentPlace" required>
+        <select id="recentPlace" name="recentPlace" required>
+            <option value="admin">Admin</option>
+            <option value="forensic">Forensic</option>
+            <option value="account">Account</option>
+            <option value="academics">Academics</option>
+        </select>
 
         <label for="prevDate">Previous Date:</label>
         <input type="date" id="prevDate" name="previousDate" required>
@@ -31,15 +36,62 @@
         <input type="time" id="prevTime" name="previousTime" required>
 
         <label for="prevPlace">Previous Place:</label>
-        <input type="text" id="prevPlace" name="previousPlace" required>
+        <select id="prevPlace" name="previousPlace" required>
+            <option value="admin">Admin</option>
+            <option value="forensic">Forensic</option>
+            <option value="account">Account</option>
+            <option value="academics">Academics</option>
+        </select>
+
+        <label for="department">Department:</label>
+        <select id="department" name="department" required>
+            <option value="admin">Admin</option>
+            <option value="forensic">Forensic</option>
+            <option value="account">Account</option>
+            <option value="academics">Academics</option>
+        </select>
 
         <button class="button" type="submit">Submit</button>
     </form>
 </div>
 
-<div>
-    
-</div>
+<script>
+    // Synchronize values between Recent Place and Previous Place dropdowns
+    const recentPlace = document.getElementById('recentPlace');
+    const prevPlace = document.getElementById('prevPlace');
+
+    recentPlace.addEventListener('change', () => {
+        prevPlace.value = recentPlace.value; // Update Previous Place when Recent Place changes
+    });
+
+    prevPlace.addEventListener('change', () => {
+        recentPlace.value = prevPlace.value; // Update Recent Place when Previous Place changes
+    });
+
+    // Synchronize values between Recent Time and Previous Time dropdowns
+    const recentTime = document.getElementById('recentTime');
+    const prevTime = document.getElementById('prevTime');
+
+    recentTime.addEventListener('change', () => {
+        prevTime.value = recentTime.value; // Update Previous Time when Recent Time changes
+    });
+
+    prevTime.addEventListener('change', () => {
+        recentTime.value = prevTime.value; // Update Recent Time when Previous Time changes
+    });
+
+    // Synchronize values between Recent Date and Previous Date
+    const recentDate = document.getElementById('recentDate');
+    const prevDate = document.getElementById('prevDate');
+
+    recentDate.addEventListener('change', () => {
+        prevDate.value = recentDate.value; // Update Previous Date when Recent Date changes
+    });
+
+    prevDate.addEventListener('change', () => {
+        recentDate.value = prevDate.value; // Update Recent Date when Previous Date changes
+    });
+</script>
 
 </body>
 </html>
